@@ -7,24 +7,44 @@ resource "aws_s3_bucket" "hosting_bucket" {
   }
 }
 
-# add Access control list to allow public read on the bucket
-resource "aws_s3_bucket_acl" "hosting_bucket_acl" {
+resource "aws_s3_bucket_ownership_controls" "hosting_bucket_ownership_controls" {
   bucket = aws_s3_bucket.hosting_bucket.id
-
-  acl = "public-read"
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
 }
 
-# add policy to allow s3:GetObject for all files under the specified arn
-resource "aws_s3_bucket_policy" "hosting_bucket_policy" {
+resource "aws_s3_bucket_public_access_block" "hosting_bucket_public_access_block" {
   bucket = aws_s3_bucket.hosting_bucket.id
 
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+# add Access control list to allow public read on the bucket
+resource "aws_s3_bucket_acl" "hosting_bucket_acl" {
+  # add dependencies from documentation
+  depends_on = [
+    aws_s3_bucket_ownership_controls.hosting_bucket_ownership_controls,
+    aws_s3_bucket_public_access_block.hosting_bucket_public_access_block,
+  ]
+
+  bucket = aws_s3_bucket.hosting_bucket.id
+  acl    = "public-read"
+}
+
+# add policy to allow s3:GetObject for all data specified
+resource "aws_s3_bucket_policy" "allow_access_from_another_account" {
+  bucket = aws_s3_bucket.hosting_bucket.id
   policy = jsonencode({
-    "Version" : "2024-7-8",
+    "Version" : "2012-10-17",
     "Statement" : [
       {
         "Effect" : "Allow",
         "Principal" : "*",
-        "Action" : "s3:GetObject",
+        "Action" : "s3:*",
         "Resource" : "arn:aws:s3:::${var.hosting_bucket_name}/*"
       }
     ]
